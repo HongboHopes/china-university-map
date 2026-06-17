@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>中国大学探索地图</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="china-geo.js"></script>
+  <script src="data.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ===== 侧边栏 ===== */
+    #sidebar {
+      width: 320px;
+      min-width: 320px;
+      height: 100vh;
+      background: rgba(15, 20, 50, 0.97);
+      border-right: 1px solid rgba(100, 140, 255, 0.15);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 16px;
+      gap: 14px;
+      overflow-y: auto;
+      z-index: 1000;
+      color: #e0e0e0;
+    }
+
+    #sidebar-header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #64b5f6, #e94560);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    #sidebar-header p {
+      font-size: 12px;
+      color: #6a6f8a;
+      margin-top: 4px;
+    }
+
+    #search-box input {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(100, 140, 255, 0.2);
+      background: rgba(20, 30, 70, 0.6);
+      color: #e0e0e0;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #search-box input:focus { border-color: #e94560; }
+    #search-box input::placeholder { color: #5a5f7a; }
+
+    .filter-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #8a8faa;
+      margin-bottom: 6px;
+    }
+
+    .filter-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .filter-tag {
+      padding: 3px 10px;
+      font-size: 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid rgba(100, 140, 255, 0.25);
+      background: rgba(20, 30, 70, 0.4);
+      color: #8a8faa;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .filter-tag:hover { border-color: rgba(100, 140, 255, 0.5); color: #c0c4d8; }
+    .filter-tag.active { background: #e94560; border-color: #e94560; color: #fff; }
+
+    #match-count {
+      font-size: 13px;
+      color: #8a8faa;
+      padding: 4px 0;
+      border-top: 1px solid rgba(100, 140, 255, 0.1);
+    }
+    #match-count strong { color: #e94560; font-size: 16px; }
+
+    #result-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .result-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(20, 30, 70, 0.4);
+      border: 1px solid rgba(100, 140, 255, 0.08);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .result-item:hover {
+      background: rgba(40, 55, 110, 0.6);
+      border-color: rgba(100, 140, 255, 0.3);
+    }
+
+    .result-item-name { font-size: 14px; font-weight: 600; }
+
+    .result-item-info {
+      font-size: 11px;
+      color: #7a7f9a;
+      margin-top: 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .result-item-level {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      background: rgba(233, 69, 96, 0.2);
+      color: #e94560;
+    }
+    .result-item-type {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      background: rgba(100, 140, 255, 0.15);
+      color: #8ab4f8;
+    }
+    #result-list-empty {
+      text-align: center;
+      color: #5a5f7a;
+      padding: 30px 0;
+      font-size: 13px;
+    }
+
+    /* ===== 地图容器 ===== */
+    #map-container {
+      flex: 1;
+      height: 100vh;
+    }
+
+    /* ===== 返回全国按钮 ===== */
+    #back-btn {
+      position: fixed;
+      top: 20px;
+      left: 340px;
+      padding: 8px 18px;
+      background: rgba(233, 69, 96, 0.9);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 1000;
+      transition: all 0.2s;
+      display: none;
+    }
+    #back-btn:hover { background: #e94560; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(233, 69, 96, 0.4); }
+    #back-btn.visible { display: block; }
+
+    /* ===== 图例 ===== */
+    #legend {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      gap: 16px;
+      background: rgba(15, 20, 50, 0.9);
+      border: 1px solid rgba(100, 140, 255, 0.15);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 12px;
+      z-index: 1000;
+      color: #e0e0e0;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-dot.l985 { background: #e94560; box-shadow: 0 0 6px #e94560; }
+    .legend-dot.l211 { background: #ff8c00; box-shadow: 0 0 6px #ff8c00; }
+    .legend-dot.l双一流 { background: #4da6ff; box-shadow: 0 0 6px #4da6ff; }
+    .legend-dot.l本科 { background: #00b894; box-shadow: 0 0 6px #00b894; }
+
+    /* ===== 弹窗 ===== */
+    #modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      backdrop-filter: blur(4px);
+    }
+    #modal-overlay.hidden { display: none; }
+
+    #modal {
+      background: rgba(20, 30, 65, 0.95);
+      border: 1px solid rgba(100, 140, 255, 0.2);
+      border-radius: 16px;
+      padding: 28px;
+      min-width: 360px;
+      max-width: 440px;
+      max-height: 85vh;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      color: #e0e0e0;
+    }
+    #modal-close {
+      position: absolute;
+      top: 12px;
+      right: 16px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6a6f8a;
+    }
+    #modal-close:hover { color: #e94560; }
+    #modal-content h2 { font-size: 22px; margin-bottom: 14px; color: #fff; }
+    #modal-content .info-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+    #modal-content .info-tag {
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      background: rgba(100, 140, 255, 0.15);
+      color: #c0c8e8;
+    }
+    #modal-content .info-tag.level-985 { background: rgba(233, 69, 96, 0.25); color: #ff6b81; }
+    #modal-content .info-tag.level-211 { background: rgba(255, 140, 0, 0.2); color: #ffb347; }
+    #modal-content .info-tag.nature-tag {
+      background: rgba(0, 180, 150, 0.2);
+      color: #00d2a0;
+    }
+
+    #modal-content .baike-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      background: linear-gradient(135deg, #e94560, #c0392b);
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #modal-content .baike-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(233, 69, 96, 0.4); }
+
+    #modal-content .website-btn {
+      background: linear-gradient(135deg, #2980b9, #1a5276);
+    }
+    #modal-content .website-btn:hover { box-shadow: 0 6px 24px rgba(41, 128, 185, 0.4); }
+
+    #modal-content .website-btn.disabled {
+      background: rgba(100, 100, 120, 0.4);
+      opacity: 0.6;
+      font-size: 13px;
+    }
+    #modal-content .website-btn.disabled:hover {
+      box-shadow: none;
+      transform: none;
+      opacity: 0.8;
+    }
+
+    #modal-content .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    #modal-content .modal-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #modal-content .modal-btn:hover { transform: translateY(-2px); }
+
+    #modal-content .info-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(100, 140, 255, 0.15);
+    }
+
+    #modal-content .info-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #8a8faa;
+      margin-bottom: 8px;
+    }
+
+    #modal-content .disc-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    #modal-content .eval-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    #modal-content .eval-tag {
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    #modal-content .eval-tag.eval-aplus {
+      background: rgba(233, 69, 96, 0.2);
+      color: #e94560;
+      border: 1px solid rgba(233, 69, 96, 0.3);
+    }
+
+    #modal-content .eval-tag.eval-a {
+      background: rgba(255, 140, 0, 0.15);
+      color: #ff8c00;
+      border: 1px solid rgba(255, 140, 0, 0.25);
+    }
+
+    #modal-content .eval-tag.eval-aminus {
+      background: rgba(255, 215, 0, 0.12);
+      color: #ffd700;
+      border: 1px solid rgba(255, 215, 0, 0.2);
+    }
+
+    #modal-content .disc-tag {
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: rgba(255, 215, 0, 0.12);
+      color: #ffd700;
+      border: 1px solid rgba(255, 215, 0, 0.2);
+    }
+
+    #modal-content .disc-more {
+      font-size: 11px;
+      color: #6a6f8a;
+      align-self: center;
+    }
+
+    #modal-content .life-details {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #modal-content .life-item {
+      display: block;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 12px;
+      color: #c0c8e8;
+      border-left: 2px solid rgba(100, 140, 255, 0.3);
+    }
+
+    #modal-content .disclaimer {
+      font-size: 10px;
+      font-weight: 400;
+      color: #e94560;
+      opacity: 0.7;
+    }
+
+    /* ===== Leaflet 弹窗样式覆盖 ===== */
+    .leaflet-popup-content-wrapper {
+      background: rgba(15, 20, 50, 0.95) !important;
+      color: #e0e0e0 !important;
+      border-radius: 10px !important;
+      border: 1px solid rgba(100, 140, 255, 0.2) !important;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif !important;
+    }
+    .leaflet-popup-tip { background: rgba(15, 20, 50, 0.95) !important; }
+    .leaflet-popup-content { margin: 12px 16px !important; font-size: 13px !important; }
+    .leaflet-popup-content b { font-size: 15px; }
+    .leaflet-popup-close-button { color: #8a8faa !important; }
+
+    /* ===== Leaflet 自定义 tooltip ===== */
+    .uni-tooltip {
+      background: rgba(15, 20, 50, 0.92) !important;
+      border: 1px solid rgba(100, 140, 255, 0.4) !important;
+      border-radius: 6px !important;
+      color: #fff !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      padding: 4px 10px !important;
+      white-space: nowrap !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    }
+    .uni-tooltip::before {
+      border-top-color: rgba(15, 20, 50, 0.92) !important;
+    }
+
+    /* ===== 响应式 ===== */
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      #sidebar { width: 100%; min-width: 0; height: auto; max-height: 40vh; }
+      #map-container { height: 60vh; }
+      #modal { min-width: 0; width: 90%; }
+      #legend { bottom: 12px; right: 12px; gap: 10px; padding: 8px 12px; font-size: 11px; }
+      #back-btn { left: 16px; top: 12px; }
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 140, 255, 0.2); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>🎓 中国大学探索地图</h1>
+      <p>覆盖 1166 所本科院校 · 助力高考志愿填报</p>
+      <p style="font-size:11px;color:#e94560;opacity:0.6;margin-top:2px;">By 洪博hopes</p>
+    </div>
+    <div id="search-box">
+      <input type="text" id="search-input" placeholder="🔍 搜索大学名称...">
+    </div>
+    <div class="filter-section">
+      <div class="filter-title">📍 省份</div>
+      <div class="filter-tags" id="province-tags"></div>
+    </div>
+    <div class="filter-section">
+      <div class="filter-title">🏫 办学层次</div>
+      <div class="filter-tags" id="level-tags"></div>
+    </div>
+    <div class="filter-section">
+      <div class="filter-title">📚 学校类型</div>
+      <div class="filter-tags" id="type-tags"></div>
+    </div>
+    <div id="match-count">匹配: <strong>0</strong> 所</div>
+    <div id="result-list"></div>
+  </div>
+
+  <div id="map-container"></div>
+
+  <button id="back-btn" onclick="returnToChina()">← 返回全国</button>
+
+  <div id="legend">
+    <div class="legend-item"><span class="legend-dot l985"></span> 985</div>
+    <div class="legend-item"><span class="legend-dot l211"></span> 211</div>
+    <div class="legend-item"><span class="legend-dot l双一流"></span> 双一流</div>
+    <div class="legend-item"><span class="legend-dot l本科"></span> 本科</div>
+  </div>
+
+  <div id="modal-overlay" class="hidden">
+    <div id="modal">
+      <span id="modal-close">&times;</span>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    // ===== DOM =====
+    var searchInput = document.getElementById('search-input');
+    var provinceTags = document.getElementById('province-tags');
+    var levelTags = document.getElementById('level-tags');
+    var typeTags = document.getElementById('type-tags');
+    var matchCount = document.getElementById('match-count');
+    var resultList = document.getElementById('result-list');
+    var modalOverlay = document.getElementById('modal-overlay');
+    var modalContent = document.getElementById('modal-content');
+    var modalClose = document.getElementById('modal-close');
+
+    // ===== 状态 =====
+    var activeProvince = null;
+    var activeLevel = null;
+    var activeType = null;
+    var searchQuery = '';
+    var zoomedProvince = null;
+    var map = null;
+    var markers = [];
+    var markerMap = {};       // name → marker
+
+    // ===== 预计算省份包围盒 =====
+    var provinceBounds = {};
+    UNIVERSITY_DATA.forEach(function(uni) {
+      var p = uni.province;
+      if (!provinceBounds[p]) {
+        provinceBounds[p] = {
+          minLng: uni.coord[0], maxLng: uni.coord[0],
+          minLat: uni.coord[1], maxLat: uni.coord[1]
+        };
+      } else {
+        var b = provinceBounds[p];
+        if (uni.coord[0] < b.minLng) b.minLng = uni.coord[0];
+        if (uni.coord[0] > b.maxLng) b.maxLng = uni.coord[0];
+        if (uni.coord[1] < b.minLat) b.minLat = uni.coord[1];
+        if (uni.coord[1] > b.maxLat) b.maxLat = uni.coord[1];
+      }
+    });
+    // 为边界添加 padding
+    Object.keys(provinceBounds).forEach(function(p) {
+      var b = provinceBounds[p];
+      var padLng = Math.max(0.3, (b.maxLng - b.minLng) * 0.3);
+      var padLat = Math.max(0.3, (b.maxLat - b.minLat) * 0.3);
+      b.minLng -= padLng;
+      b.maxLng += padLng;
+      b.minLat -= padLat;
+      b.maxLat += padLat;
+    });
+
+    // ===== 数据校验 =====
+    if (typeof UNIVERSITY_DATA === 'undefined' || !UNIVERSITY_DATA.length) {
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#e94560;font-size:18px;background:#f5f5f5;">❌ 数据加载失败，请检查 data.js 文件是否存在</div>';
+      throw new Error('UNIVERSITY_DATA not found');
+    }
+
+    // ===== 初始化地图 =====
+    var provinceBorderLayer = null;
+    var provinceClickLayer = null;
+    var overlayGroup = null;
+    var selectedProvinceName = null;
+
+    function initMap() {
+      map = L.map('map-container', {
+        center: [37, 104.5],
+        zoom: 5,
+        zoomControl: false,
+        attributionControl: false,
+        maxBounds: [[15, 70], [55, 140]],  // 限制在中国范围内
+        maxBoundsViscosity: 1.0,           // 不允许拖出边界
+        minZoom: 4                         // 最小缩放级别
+      });
+
+      // 高德地图瓦片
+      L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+        subdomains: ['1', '2', '3', '4'],
+        maxZoom: 18,
+        minZoom: 3
+      }).addTo(map);
+
+      // 缩放控件
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      // 绘制省界线 + 可点击省份区域
+      if (typeof CHINA_GEOJSON !== 'undefined') {
+        // 省界线（纯视觉）
+        provinceBorderLayer = L.geoJSON(CHINA_GEOJSON, {
+          style: {
+            color: 'rgba(100, 140, 255, 0.5)',
+            weight: 1.5,
+            fill: false,
+            dashArray: null
+          },
+          interactive: false
+        }).addTo(map);
+
+        // 透明可点击的省份区域
+        provinceClickLayer = L.geoJSON(CHINA_GEOJSON, {
+          style: {
+            color: 'transparent',
+            weight: 0,
+            fillColor: 'transparent',
+            fillOpacity: 0
+          },
+          onEachFeature: function(feature, layer) {
+            layer.on('click', function(e) {
+              if (zoomedProvince) return; // 已放大状态不处理
+              L.DomEvent.stopPropagation(e);
+              var longName = feature.properties.name;
+              for (var s in PROVINCE_NAME_MAP) {
+                if (PROVINCE_NAME_MAP[s] === longName) {
+                  zoomToProvince(s);
+                  return;
+                }
+              }
+            });
+            layer.on('mouseover', function() {
+              if (!zoomedProvince) map.getContainer().style.cursor = 'pointer';
+            });
+            layer.on('mouseout', function() {
+              map.getContainer().style.cursor = '';
+            });
+          }
+        }).addTo(map);
+      }
+
+      // 虚化覆盖层容器
+      overlayGroup = L.featureGroup().addTo(map);
+
+      // 添加大学标记
+      addAllMarkers();
+    }
+
+    // ===== 获取层次颜色 =====
+    function getLevelColor(level) {
+      if (level.indexOf('985') !== -1) return '#e94560';
+      if (level.indexOf('211') !== -1) return '#ff8c00';
+      if (level.indexOf('双一流') !== -1) return '#4da6ff';
+      return '#00b894';
+    }
+
+    function getLevelRank(level) {
+      if (level.indexOf('985') !== -1) return 1;
+      if (level.indexOf('211') !== -1) return 2;
+      if (level.indexOf('双一流') !== -1) return 3;
+      return 4;
+    }
+
+    // ===== 添加大学标记 =====
+    function addAllMarkers() {
+      UNIVERSITY_DATA.forEach(function(uni) {
+        var color = getLevelColor(uni.level);
+        var rank = getLevelRank(uni.level);
+        var radius = rank === 1 ? 11 : (rank === 2 ? 9 : (rank === 3 ? 7 : 7));
+
+        var marker = L.circleMarker([uni.coord[1], uni.coord[0]], {
+          radius: radius,
+          fillColor: color,
+          color: '#fff',
+          weight: 2.5,
+          opacity: 1,
+          fillOpacity: 0.9,
+          className: 'uni-marker'
+        });
+
+        // 悬停时显示学校名称 tooltip
+        marker.bindTooltip(uni.name, {
+          permanent: false,
+          direction: 'top',
+          offset: [0, -radius - 4],
+          className: 'uni-tooltip'
+        });
+
+        // 悬停交互效果
+        marker.on('mouseover', function(e) {
+          this.setRadius(radius + 5);
+          this.setStyle({
+            weight: 3,
+            fillOpacity: 1,
+            color: '#fff'
+          });
+          this.bringToFront();
+        });
+
+        marker.on('mouseout', function(e) {
+          this.setRadius(radius);
+          this.setStyle({
+            weight: 2,
+            fillOpacity: 0.85,
+            color: '#fff'
+          });
+        });
+
+        marker.on('click', function(e) {
+          L.DomEvent.stopPropagation(e);
+          map.flyTo([uni.coord[1], uni.coord[0]], 15, { duration: 0.4 });
+          setTimeout(function() { showModal(uni); }, 300);
+        });
+
+        marker.addTo(map);
+        markers.push(marker);
+        markerMap[uni.name] = marker;
+      });
+    }
+
+    // ===== 筛选逻辑 =====
+    function filterData() {
+      return UNIVERSITY_DATA.filter(function(uni) {
+        if (activeProvince && uni.province !== activeProvince) return false;
+        if (activeLevel && uni.level.indexOf(activeLevel) === -1) return false;
+        if (activeType && uni.type !== activeType) return false;
+        if (searchQuery) {
+          var q = searchQuery.toLowerCase();
+          if (uni.name.toLowerCase().indexOf(q) === -1 &&
+              uni.province.toLowerCase().indexOf(q) === -1 &&
+              uni.city.toLowerCase().indexOf(q) === -1) return false;
+        }
+        return true;
+      });
+    }
+
+    // ===== 更新标记显示 =====
+    function updateMarkers() {
+      var filtered = filterData();
+      var visibleNames = {};
+      filtered.forEach(function(u) { visibleNames[u.name] = true; });
+
+      markers.forEach(function(m) {
+        // 通过 markerMap 反查名称比较低效，直接用坐标对比
+        // 改用遍历 UNIVERSITY_DATA
+      });
+
+      UNIVERSITY_DATA.forEach(function(uni) {
+        var m = markerMap[uni.name];
+        if (!m) return;
+        if (visibleNames[uni.name]) {
+          m.addTo(map);
+        } else {
+          m.remove();
+        }
+      });
+
+      matchCount.innerHTML = '匹配: <strong>' + filtered.length + '</strong> 所';
+    }
+
+    // ===== 结果列表 =====
+    function renderResultList() {
+      var filtered = filterData();
+
+      if (filtered.length === 0) {
+        resultList.innerHTML = '<div id="result-list-empty">😔 未找到匹配的大学<br><span style="font-size:11px;">试试调整筛选条件</span></div>';
+        return;
+      }
+
+      var html = '';
+      filtered.forEach(function(uni) {
+        var levelTagsHtml = uni.level.map(function(l) {
+          return '<span class="result-item-level">' + l + '</span>';
+        }).join(' ');
+
+        html +=
+          '<div class="result-item" data-name="' + uni.name + '">' +
+            '<div class="result-item-name">' + uni.name + '</div>' +
+            '<div class="result-item-info">' +
+              '<span>📍 ' + uni.province + ' · ' + uni.city + '</span>' +
+              levelTagsHtml +
+              '<span class="result-item-type">' + uni.type + '</span>' +
+            '</div>' +
+          '</div>';
+      });
+
+      resultList.innerHTML = html;
+
+      resultList.querySelectorAll('.result-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+          var name = this.getAttribute('data-name');
+          var uni = UNIVERSITY_DATA.find(function(u) { return u.name === name; });
+          if (uni) {
+            // 地图飞行定位到该大学
+            map.flyTo([uni.coord[1], uni.coord[0]], 15, { duration: 0.6 });
+            // 短暂延迟后弹出信息卡片
+            setTimeout(function() { showModal(uni); }, 400);
+          }
+        });
+      });
+    }
+
+    function highlightResultItem(name) {
+      resultList.querySelectorAll('.result-item').forEach(function(item) {
+        item.style.borderColor = item.getAttribute('data-name') === name
+          ? 'rgba(233, 69, 96, 0.5)' : '';
+      });
+    }
+
+    // ===== 省份名称映射（短省名 → 长省名） =====
+    var PROVINCE_NAME_MAP = {
+      '北京':'北京市','天津':'天津市','上海':'上海市','重庆':'重庆市',
+      '广东':'广东省','江苏':'江苏省','浙江':'浙江省','山东':'山东省','河南':'河南省',
+      '河北':'河北省','山西':'山西省','辽宁':'辽宁省','吉林':'吉林省','黑龙江':'黑龙江省',
+      '安徽':'安徽省','福建':'福建省','江西':'江西省','湖北':'湖北省','湖南':'湖南省',
+      '四川':'四川省','贵州':'贵州省','云南':'云南省','陕西':'陕西省','甘肃':'甘肃省',
+      '青海':'青海省','海南':'海南省',
+      '广西':'广西壮族自治区','内蒙古':'内蒙古自治区','西藏':'西藏自治区',
+      '宁夏':'宁夏回族自治区','新疆':'新疆维吾尔自治区'
+    };
+
+    function getLongProvinceName(shortName) {
+      return PROVINCE_NAME_MAP[shortName] || null;
+    }
+
+    // ===== 省份缩放 =====
+    function zoomToProvince(shortName) {
+      var bounds = provinceBounds[shortName];
+      if (!bounds) return;
+
+      zoomedProvince = shortName;
+      activeProvince = shortName;
+      selectedProvinceName = getLongProvinceName(shortName);
+
+      // 显示虚化覆盖层：所有省份变暗，选中省份留空
+      if (typeof CHINA_GEOJSON !== 'undefined' && overlayGroup) {
+        overlayGroup.clearLayers();
+        CHINA_GEOJSON.features.forEach(function(feature) {
+          var name = feature.properties.name;
+          if (name !== selectedProvinceName) {
+            overlayGroup.addLayer(L.geoJSON(feature, {
+              style: {
+                color: 'rgba(100, 140, 255, 0.08)',
+                weight: 0.5,
+                fillColor: '#000',
+                fillOpacity: 0.55
+              },
+              interactive: false
+            }));
+          } else {
+            // 选中省份：亮色边框高亮
+            overlayGroup.addLayer(L.geoJSON(feature, {
+              style: {
+                color: '#e94560',
+                weight: 3,
+                fill: false,
+                dashArray: null
+              },
+              interactive: false
+            }));
+          }
+        });
+      }
+
+      // 飞行缩放
+      map.flyToBounds(
+        [[bounds.minLat, bounds.minLng], [bounds.maxLat, bounds.maxLng]],
+        { padding: [30, 30], maxZoom: 12, duration: 0.8 }
+      );
+
+      // 更新侧边栏
+      provinceTags.querySelectorAll('.filter-tag').forEach(function(t) {
+        t.classList.remove('active');
+        if (t.textContent === shortName) t.classList.add('active');
+      });
+
+      document.getElementById('back-btn').classList.add('visible');
+      updateMarkers();
+      renderResultList();
+    }
+
+    window.returnToChina = function() {
+      zoomedProvince = null;
+      activeProvince = null;
+      selectedProvinceName = null;
+
+      // 清除虚化覆盖层
+      if (overlayGroup) {
+        overlayGroup.clearLayers();
+      }
+
+      map.flyTo([37, 104.5], 5, { duration: 0.8 });
+
+      provinceTags.querySelectorAll('.filter-tag').forEach(function(t) {
+        t.classList.remove('active');
+      });
+
+      document.getElementById('back-btn').classList.remove('visible');
+      updateMarkers();
+      renderResultList();
+    };
+
+    // ===== 初始化筛选标签 =====
+    function initFilters() {
+      var provinces = [];
+      UNIVERSITY_DATA.forEach(function(u) {
+        if (provinces.indexOf(u.province) === -1) provinces.push(u.province);
+      });
+      provinces.sort();
+
+      provinces.forEach(function(p) {
+        var tag = document.createElement('span');
+        tag.className = 'filter-tag';
+        tag.textContent = p;
+        tag.addEventListener('click', function() {
+          var wasActive = tag.classList.contains('active');
+          provinceTags.querySelectorAll('.filter-tag').forEach(function(t) { t.classList.remove('active'); });
+          if (wasActive) {
+            window.returnToChina();
+            return;
+          } else {
+            tag.classList.add('active');
+            zoomToProvince(p);
+          }
+        });
+        provinceTags.appendChild(tag);
+      });
+
+      ['985', '211', '双一流', '本科'].forEach(function(l) {
+        var tag = document.createElement('span');
+        tag.className = 'filter-tag';
+        tag.textContent = l;
+        tag.addEventListener('click', function() {
+          var wasActive = tag.classList.contains('active');
+          levelTags.querySelectorAll('.filter-tag').forEach(function(t) { t.classList.remove('active'); });
+          if (wasActive) {
+            activeLevel = null;
+          } else {
+            tag.classList.add('active');
+            activeLevel = l;
+          }
+          updateMarkers();
+          renderResultList();
+        });
+        levelTags.appendChild(tag);
+      });
+
+      var types = [];
+      UNIVERSITY_DATA.forEach(function(u) {
+        if (types.indexOf(u.type) === -1) types.push(u.type);
+      });
+      types.sort();
+
+      types.forEach(function(t) {
+        var tag = document.createElement('span');
+        tag.className = 'filter-tag';
+        tag.textContent = t;
+        tag.addEventListener('click', function() {
+          var wasActive = tag.classList.contains('active');
+          typeTags.querySelectorAll('.filter-tag').forEach(function(tag) { tag.classList.remove('active'); });
+          if (wasActive) {
+            activeType = null;
+          } else {
+            tag.classList.add('active');
+            activeType = t;
+          }
+          updateMarkers();
+          renderResultList();
+        });
+        typeTags.appendChild(tag);
+      });
+    }
+
+    // ===== 搜索 =====
+    var searchTimer;
+    searchInput.addEventListener('input', function() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function() {
+        searchQuery = searchInput.value.trim();
+        updateMarkers();
+        renderResultList();
+      }, 200);
+    });
+
+    // ===== 弹窗 =====
+    function showModal(uni) {
+      var levelTagsHtml = uni.level.map(function(l) {
+        var cls = 'info-tag';
+        if (l === '985') cls += ' level-985';
+        if (l === '211') cls += ' level-211';
+        return '<span class="' + cls + '">' + l + '</span>';
+      }).join(' ');
+
+      // 学科评估
+      var evalHtml = '';
+      if (uni.eval) {
+        var evalItems = uni.eval.split('、');
+        var evalTags = evalItems.map(function(item) {
+          var cls = 'eval-tag';
+          if (item.indexOf('(A+)') !== -1) cls += ' eval-aplus';
+          else if (item.indexOf('(A)') !== -1) cls += ' eval-a';
+          else cls += ' eval-aminus';
+          return '<span class="' + cls + '">' + item + '</span>';
+        }).join('');
+        evalHtml =
+          '<div class="info-section">' +
+            '<div class="info-section-title">📊 第四轮学科评估</div>' +
+            '<div class="eval-tags">' + evalTags + '</div>' +
+          '</div>';
+      }
+
+      // 生活细节
+      var lifeHtml = '';
+      if (uni.student_life) {
+        var parts = uni.student_life.split(' | ');
+        var lifeItems = parts.map(function(p) {
+          return '<span class="life-item">' + p + '</span>';
+        }).join('');
+        lifeHtml =
+          '<div class="info-section">' +
+            '<div class="info-section-title">🛏 食宿 & 校园 ' +
+              '<span class="disclaimer">（网络整理，仅供参考）</span>' +
+            '</div>' +
+            '<div class="life-details">' + lifeItems + '</div>' +
+          '</div>';
+      }
+
+      // 优势学科标签
+      var discHtml = '';
+      if (uni.top_disciplines && uni.top_disciplines.length > 0) {
+        var discTags = uni.top_disciplines.slice(0, 12).map(function(d) {
+          return '<span class="disc-tag">' + d + '</span>';
+        }).join('');
+        var moreText = uni.top_disciplines.length > 12 ? ' <span class="disc-more">等' + uni.top_disciplines.length + '个学科</span>' : '';
+        discHtml =
+          '<div class="info-section">' +
+            '<div class="info-section-title">⭐ ' + (uni.level.indexOf('双一流') !== -1 ? '双一流建设学科' : '王牌专业') + '</div>' +
+            '<div class="disc-tags">' + discTags + moreText + '</div>' +
+          '</div>';
+      }
+
+      modalContent.innerHTML =
+        '<h2>' + uni.name + '</h2>' +
+        '<div class="info-row">' +
+          '<span class="info-tag">📍 ' + uni.province + ' · ' + uni.city + '</span>' +
+          '<span class="info-tag">📚 ' + uni.type + '</span>' +
+          (uni.nature ? '<span class="info-tag nature-tag">' + (uni.nature === '民办' ? '💰 ' : uni.nature === '军事院校' ? '🎖 ' : '🏫 ') + uni.nature + '</span>' : '') +
+          (uni.founded ? '<span class="info-tag">📅 ' + uni.founded + '年建校</span>' : '') +
+        '</div>' +
+        '<div class="info-row">' + levelTagsHtml + '</div>' +
+        lifeHtml +
+        discHtml +
+        evalHtml +
+        '<div class="modal-actions">' +
+          '<a class="modal-btn baike-btn" href="' + uni.baike_url + '" target="_blank" rel="noopener">📖 百度百科</a>' +
+          (uni.website && uni.website.startsWith('http') ? '<a class="modal-btn website-btn" href="' + uni.website + '" target="_blank" rel="noopener">🌐 招生官网</a>' : '<span class="modal-btn website-btn disabled">🌐 官网待补充</span>') +
+        '</div>';
+
+      modalOverlay.classList.remove('hidden');
+    }
+
+    function hideModal() { modalOverlay.classList.add('hidden'); }
+
+    modalClose.addEventListener('click', hideModal);
+    modalOverlay.addEventListener('click', function(e) {
+      if (e.target === modalOverlay) hideModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') hideModal();
+    });
+
+    // ===== 启动 =====
+    initMap();
+    initFilters();
+    updateMarkers();
+    renderResultList();
+  })();
+  </script>
+</body>
+</html>
