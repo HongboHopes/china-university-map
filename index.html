@@ -688,7 +688,8 @@
     function filterData() {
       return UNIVERSITY_DATA.filter(function(uni) {
         if (activeProvince && uni.province !== activeProvince) return false;
-        if (activeLevel && uni.level.indexOf(activeLevel) === -1) return false;
+        if (activeLevel && uni.level.indexOf(activeLevel) === -1 && activeLevel !== '民办') return false;
+        if (activeLevel === '民办' && uni.nature !== '民办') return false;
         if (activeType && uni.type !== activeType) return false;
         if (searchQuery) {
           var q = searchQuery.toLowerCase();
@@ -892,7 +893,7 @@
         provinceTags.appendChild(tag);
       });
 
-      ['985', '211', '双一流', '本科'].forEach(function(l) {
+      ['985', '211', '双一流', '本科', '民办'].forEach(function(l) {
         var tag = document.createElement('span');
         tag.className = 'filter-tag';
         tag.textContent = l;
